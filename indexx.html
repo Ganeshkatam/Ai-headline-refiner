@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venture Headline Refiner - AI MVP</title>
+    <!-- Load Tailwind CSS for rapid mobile-first styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font and dark theme for a professional, "founder" aesthetic */
+        body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: #f0f6fc; }
+        .card { background-color: #161b22; border: 1px solid #30363d; }
+        .glow-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); /* Emerald glow */
+        }
+        .glow-button:hover {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.8), 0 0 40px rgba(16, 185, 129, 0.4);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen flex items-center justify-center">
+
+    <div class="w-full max-w-xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-emerald-400">
+                Venture Headline Refiner
+            </h1>
+            <p class="text-xl mt-2 text-gray-300">Convert your vague idea into a razor-sharp, investor-ready pitch line (max 15 words).</p>
+            <p id="counter-display" class="mt-4 text-sm font-semibold"></p>
+        </header>
+
+        <div id="app-container" class="space-y-6">
+
+            <!-- Input Area -->
+            <div class="card p-6 rounded-xl shadow-2xl">
+                <label for="input-text" class="block text-lg font-medium mb-2 text-gray-200">Paste Your Business Concept (Vague is fine):</label>
+                <textarea id="input-text" class="w-full h-28 bg-gray-800 border border-gray-600 rounded-lg p-3 text-white focus:ring-emerald-500 focus:border-emerald-500 transition duration-150" placeholder="e.g., 'We make a CRM for small businesses that uses AI to follow up.'"></textarea>
+                <button id="refine-button" class="w-full mt-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg glow-button focus:outline-none focus:ring-4 focus:ring-emerald-500 focus:ring-opacity-50" onclick="refineContent()">
+                    Generate Venture Headline
+                </button>
+            </div>
+
+            <!-- Output Area / Paywall Target -->
+            <div class="card p-6 rounded-xl shadow-2xl min-h-[120px] relative">
+                <label for="output-text" class="block text-lg font-medium mb-2 text-gray-200">VC-Ready Headline:</label>
+                <div id="output-text" class="bg-gray-800 border border-gray-600 rounded-lg p-3 text-lg font-medium text-yellow-300 whitespace-pre-wrap min-h-[70px]">
+                    Your disruptive headline will appear here.
+                </div>
+                <!-- Loading Indicator -->
+                <div id="loading-indicator" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-80 rounded-xl z-10">
+                    <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-white mt-2">AI is engineering your pitch...</p>
+                </div>
+            </div>
+
+            <!-- Manual Paywall Gate -->
+            <div id="paywall-gate" class="hidden card p-8 rounded-xl shadow-2xl border-4 border-red-500 bg-red-900/20 text-center">
+                <h2 class="text-3xl font-bold text-red-400 mb-4">Limit Reached. Time is Money.</h2>
+                <p class="text-xl text-gray-100 mb-6">Unlock **Unlimited, Urgent Access** for a single <span class="text-green-400 font-bold">$5 USD</span> fee.</p>
+                <div class="space-y-4 text-left mx-auto max-w-sm">
+                    <p class="text-lg text-gray-200"><span class="font-bold text-emerald-400">1. Pay:</span> Send $5 USD to [Your PayPal.Me/Venmo/CashApp Link]</p>
+                    <p class="text-lg text-gray-200"><span class="font-bold text-emerald-400">2. Proof:</span> Email the payment screenshot to <a href="mailto:your.dedicated.email@example.com" class="underline text-yellow-400">your.dedicated.email@example.com</a></p>
+                    <p class="text-lg text-gray-200"><span class="font-bold text-emerald-400">3. Access:</span> We will instantly reply with your **Permanent Access Code**.</p>
+                </div>
+                <p class="mt-6 text-xs text-red-300 italic">This is a zero-friction, founder-to-founder launch special.</p>
+                
+                <div class="flex mt-4 max-w-sm mx-auto">
+                    <input type="text" id="access-code-input" class="flex-grow bg-gray-700 border border-gray-600 rounded-l-lg p-3 text-white focus:ring-green-500 focus:border-green-500" placeholder="Enter Access Code for Premium">
+                    <button class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-3 rounded-r-lg" onclick="redeemCode()">Redeem</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module">
+        // Global Constants
+        const MAX_FREE_USES = 3;
+        const ACCESS_CODE_KEY = "is_premium_user";
+        const USAGE_COUNTER_KEY = "usage_count_24h";
+        const DUMMY_ACCESS_CODE = "VCACCELERATE"; // The manual code you will email after payment confirmation
+
+        // API Configuration (API Key is left empty for automatic injection by the environment)
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        // DOM Elements
+        const inputElement = document.getElementById('input-text');
+        const outputElement = document.getElementById('output-text');
+        const buttonElement = document.getElementById('refine-button');
+        const loadingElement = document.getElementById('loading-indicator');
+        const counterDisplay = document.getElementById('counter-display');
+        const paywallGate = document.getElementById('paywall-gate');
+
+        // --- Utility Functions ---
+
+        function updateCounterDisplay() {
+            const isPremium = sessionStorage.getItem(ACCESS_CODE_KEY) === 'true';
+            const usageCount = parseInt(sessionStorage.getItem(USAGE_COUNTER_KEY) || '0', 10);
+            
+            if (isPremium) {
+                counterDisplay.textContent = "Status: Unlimited Access. Keep refining!";
+                counterDisplay.classList.add('text-green-400');
+                paywallGate.classList.add('hidden');
+            } else if (usageCount >= MAX_FREE_USES) {
+                counterDisplay.textContent = "Status: Free Limit Reached. Unlock for $5 and raise your seed round!";
+                counterDisplay.classList.add('text-red-400');
+                buttonElement.disabled = true;
+                paywallGate.classList.remove('hidden');
+            } else {
+                const remaining = MAX_FREE_USES - usageCount;
+                counterDisplay.textContent = `Status: ${remaining} free headline${remaining !== 1 ? 's' : ''} remaining.`;
+                counterDisplay.classList.remove('text-red-400', 'text-green-400');
+                counterDisplay.classList.add('text-yellow-400');
+                buttonElement.disabled = false;
+                paywallGate.classList.add('hidden');
+            }
+        }
+
+        function incrementUsage() {
+            let usageCount = parseInt(sessionStorage.getItem(USAGE_COUNTER_KEY) || '0', 10);
+            usageCount++;
+            sessionStorage.setItem(USAGE_COUNTER_KEY, usageCount.toString());
+            updateCounterDisplay();
+        }
+
+        window.redeemCode = function() {
+            const code = document.getElementById('access-code-input').value.trim();
+            if (code.toUpperCase() === DUMMY_ACCESS_CODE) {
+                sessionStorage.setItem(ACCESS_CODE_KEY, 'true');
+                outputElement.innerHTML = `<p class="text-green-400 font-bold">Success! Unlimited Access Granted. Time to finalize that pitch!</p>`;
+                document.getElementById('access-code-input').value = "";
+                updateCounterDisplay();
+            } else {
+                outputElement.innerHTML = `<p class="text-red-400 font-bold">Invalid Code. Please confirm payment and check your email.</p>`;
+            }
+        }
+
+
+        // --- Core AI Functionality ---
+
+        window.refineContent = async function() {
+            const prompt = inputElement.value.trim();
+
+            if (!prompt) {
+                outputElement.textContent = "Please paste your vague business idea or pitch concept here.";
+                return;
+            }
+
+            // Check limit before running
+            const isPremium = sessionStorage.getItem(ACCESS_CODE_KEY) === 'true';
+            const usageCount = parseInt(sessionStorage.getItem(USAGE_COUNTER_KEY) || '0', 10);
+
+            if (!isPremium && usageCount >= MAX_FREE_USES) {
+                updateCounterDisplay(); 
+                return;
+            }
+
+            loadingElement.classList.remove('hidden');
+            buttonElement.disabled = true;
+
+            // The high-leverage prompt designed for VC-ready output
+            const systemPrompt = `You are an elite VC copywriter, summarizing complex technology into a single, disruptive, investor-ready sentence. Output MUST be under 15 words. Focus on market disruption, uniqueness, and potential growth. ONLY return the refined headline. Do not use greetings or commentary.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            const maxRetries = 3;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Refinement failed. Try again with clearer input.";
+                    
+                    outputElement.textContent = text;
+                    
+                    if (!isPremium) {
+                        incrementUsage();
+                    }
+
+                    break; 
+
+                } catch (error) {
+                    console.error("API Call failed (Retrying):", error);
+                    if (i === maxRetries - 1) {
+                        outputElement.textContent = `Error: Could not generate headline. Try simplifying your input.`;
+                    }
+                    // Implement exponential backoff
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                }
+            }
+            
+            loadingElement.classList.add('hidden');
+            updateCounterDisplay(); 
+        }
+
+        // Initial setup on load
+        updateCounterDisplay();
+
+    </script>
+</body>
+</html>
